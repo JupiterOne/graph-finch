@@ -7,7 +7,8 @@ import {
 export const Steps = {
   ACCOUNT: 'fetch-account',
   USERS: 'fetch-users',
-  RELATIONSHIPS: 'fetch-relationships',
+  BUILD_USER_TO_USER_RELATIONSHIP: 'build-user-to-user-relationship',
+  BUILD_ACCOUNT_TO_USER_RELATIONSHIP: 'build-account-to-user-relationship',
 };
 
 export function Entities(
