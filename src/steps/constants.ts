@@ -7,6 +7,7 @@ import {
 export const Steps = {
   ACCOUNT: 'fetch-account',
   USERS: 'fetch-users',
+  RELATIONSHIPS: 'fetch-relationships',
 };
 
 export function Entities(
