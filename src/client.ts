@@ -1,9 +1,10 @@
 import { IntegrationConfig } from './config';
-import { GaxiosOptions, request } from 'gaxios';
+import { GaxiosError, GaxiosOptions, request } from 'gaxios';
 import { DirectoryResponse, DirectoryUser, Account } from './types';
 import {
   IntegrationProviderAPIError,
   IntegrationProviderAuthorizationError,
+  IntegrationProviderAuthenticationError,
 } from '@jupiterone/integration-sdk-core';
 
 export type ResourceIteratee<T> = (each: T) => Promise<void> | void;
@@ -32,22 +33,19 @@ export class APIClient {
       method: 'GET',
       headers: this.headers,
     };
-    const response = await request<DirectoryResponse>(requestOpts);
-
-    if (response.status === 200) {
-      return;
-    } else if (response.status === 401) {
-      throw new IntegrationProviderAuthorizationError({
-        endpoint: response.config.url as string,
-        status: 401,
-        statusText: 'Unauthorized',
-      });
-    } else {
-      throw new IntegrationProviderAPIError({
-        endpoint: response.config.url as string,
-        status: response.status,
-        statusText: response.statusText,
-      });
+    try {
+      const response = await request<DirectoryResponse>(requestOpts);
+      if (response) return;
+    } catch (err) {
+      if (err instanceof GaxiosError) {
+        throw this.createIntegrationError(
+          err.response?.status as number,
+          err.response?.statusText as string,
+          err.response?.config?.url as string,
+        );
+      } else {
+        throw err;
+      }
     }
   }
 
@@ -64,8 +62,20 @@ export class APIClient {
       method: 'GET',
       headers: this.headers,
     };
-    const response = await request<Account>(requestOpts);
-    await converter(response.data);
+    try {
+      const response = await request<Account>(requestOpts);
+      await converter(response.data);
+    } catch (err) {
+      if (err instanceof GaxiosError) {
+        throw this.createIntegrationError(
+          err.response?.status as number,
+          err.response?.statusText as string,
+          err.response?.config?.url as string,
+        );
+      } else {
+        throw err;
+      }
+    }
   }
 
   /**
@@ -81,10 +91,49 @@ export class APIClient {
       method: 'GET',
       headers: this.headers,
     };
-    const response = await request<DirectoryResponse>(requestOpts);
+    try {
+      const response = await request<DirectoryResponse>(requestOpts);
 
-    for (const user of response.data.individuals) {
-      await iteratee(user);
+      for (const user of response.data.individuals) {
+        await iteratee(user);
+      }
+    } catch (err) {
+      if (err instanceof GaxiosError) {
+        throw this.createIntegrationError(
+          err.response?.status as number,
+          err.response?.statusText as string,
+          err.response?.config?.url as string,
+        );
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  private createIntegrationError(
+    status: number,
+    statusText: string,
+    endpoint: string,
+  ) {
+    switch (status) {
+      case 401:
+        return new IntegrationProviderAuthenticationError({
+          status,
+          statusText,
+          endpoint,
+        });
+      case 403:
+        return new IntegrationProviderAuthorizationError({
+          status,
+          statusText,
+          endpoint,
+        });
+      default:
+        return new IntegrationProviderAPIError({
+          status,
+          statusText,
+          endpoint,
+        });
     }
   }
 }

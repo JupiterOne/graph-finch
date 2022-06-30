@@ -75,7 +75,7 @@ describe('#validateInvocation', () => {
         // tests validate that invalid configurations throw an error
         // with an appropriate and expected message.
         await expect(validateInvocation(executionContext)).rejects.toThrow(
-          'Request failed with status code 401',
+          'Provider authentication failed at https://api.tryfinch.com/employer/directory?limit=1: 401 Unauthorized',
         );
       });
     });
