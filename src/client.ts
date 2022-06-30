@@ -1,9 +1,10 @@
-import http from 'http';
-
-import { IntegrationProviderAuthenticationError } from '@jupiterone/integration-sdk-core';
-
 import { IntegrationConfig } from './config';
-import { AcmeUser, AcmeGroup } from './types';
+import { GaxiosOptions, request } from 'gaxios';
+import { DirectoryResponse, DirectoryUser, Account } from './types';
+import {
+  IntegrationProviderAPIError,
+  IntegrationProviderAuthorizationError,
+} from '@jupiterone/integration-sdk-core';
 
 export type ResourceIteratee<T> = (each: T) => Promise<void> | void;
 
@@ -16,41 +17,55 @@ export type ResourceIteratee<T> = (each: T) => Promise<void> | void;
  * resources.
  */
 export class APIClient {
+  private BASE_URL = 'https://api.tryfinch.com';
+  private headers = {
+    'Finch-API-Version': '2020-09-17',
+    'Content-Type': 'application/json',
+    Authorization: 'Bearer ' + this.config.accessToken,
+  };
+
   constructor(readonly config: IntegrationConfig) {}
 
   public async verifyAuthentication(): Promise<void> {
-    // TODO make the most light-weight request possible to validate
-    // authentication works with the provided credentials, throw an err if
-    // authentication fails
-    const request = new Promise<void>((resolve, reject) => {
-      http.get(
-        {
-          hostname: 'localhost',
-          port: 443,
-          path: '/api/v1/some/endpoint?limit=1',
-          agent: false,
-          timeout: 10,
-        },
-        (res) => {
-          if (res.statusCode !== 200) {
-            reject(new Error('Provider authentication failed'));
-          } else {
-            resolve();
-          }
-        },
-      );
-    });
+    const requestOpts: GaxiosOptions = {
+      url: this.BASE_URL + '/employer/directory?limit=1',
+      method: 'GET',
+      headers: this.headers,
+    };
+    const response = await request<DirectoryResponse>(requestOpts);
 
-    try {
-      await request;
-    } catch (err) {
-      throw new IntegrationProviderAuthenticationError({
-        cause: err,
-        endpoint: 'https://localhost/api/v1/some/endpoint?limit=1',
-        status: err.status,
-        statusText: err.statusText,
+    if (response.status === 200) {
+      return;
+    } else if (response.status === 401) {
+      throw new IntegrationProviderAuthorizationError({
+        endpoint: response.config.url as string,
+        status: 401,
+        statusText: 'Unauthorized',
+      });
+    } else {
+      throw new IntegrationProviderAPIError({
+        endpoint: response.config.url as string,
+        status: response.status,
+        statusText: response.statusText,
       });
     }
+  }
+
+  /**
+   * Queries and generates Account entity.
+   *
+   * @param iteratee receives each resource to produce entities/relationships
+   */
+  public async getAccount(
+    converter: (account: Account) => Promise<void> | void,
+  ): Promise<void> {
+    const requestOpts: GaxiosOptions = {
+      url: this.BASE_URL + '/employer/company',
+      method: 'GET',
+      headers: this.headers,
+    };
+    const response = await request<Account>(requestOpts);
+    await converter(response.data);
   }
 
   /**
@@ -59,62 +74,17 @@ export class APIClient {
    * @param iteratee receives each resource to produce entities/relationships
    */
   public async iterateUsers(
-    iteratee: ResourceIteratee<AcmeUser>,
+    iteratee: ResourceIteratee<DirectoryUser>,
   ): Promise<void> {
-    // TODO paginate an endpoint, invoke the iteratee with each record in the
-    // page
-    //
-    // The provider API will hopefully support pagination. Functions like this
-    // should maintain pagination state, and for each page, for each record in
-    // the page, invoke the `ResourceIteratee`. This will encourage a pattern
-    // where each resource is processed and dropped from memory.
+    const requestOpts: GaxiosOptions = {
+      url: this.BASE_URL + '/employer/directory',
+      method: 'GET',
+      headers: this.headers,
+    };
+    const response = await request<DirectoryResponse>(requestOpts);
 
-    const users: AcmeUser[] = [
-      {
-        id: 'acme-user-1',
-        name: 'User One',
-      },
-      {
-        id: 'acme-user-2',
-        name: 'User Two',
-      },
-    ];
-
-    for (const user of users) {
+    for (const user of response.data.individuals) {
       await iteratee(user);
-    }
-  }
-
-  /**
-   * Iterates each group resource in the provider.
-   *
-   * @param iteratee receives each resource to produce entities/relationships
-   */
-  public async iterateGroups(
-    iteratee: ResourceIteratee<AcmeGroup>,
-  ): Promise<void> {
-    // TODO paginate an endpoint, invoke the iteratee with each record in the
-    // page
-    //
-    // The provider API will hopefully support pagination. Functions like this
-    // should maintain pagination state, and for each page, for each record in
-    // the page, invoke the `ResourceIteratee`. This will encourage a pattern
-    // where each resource is processed and dropped from memory.
-
-    const groups: AcmeGroup[] = [
-      {
-        id: 'acme-group-1',
-        name: 'Group One',
-        users: [
-          {
-            id: 'acme-user-1',
-          },
-        ],
-      },
-    ];
-
-    for (const group of groups) {
-      await iteratee(group);
     }
   }
 }
