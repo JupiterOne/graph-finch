@@ -1,25 +1,53 @@
 // Providers often supply types with their API libraries.
 
-export interface AcmeUser {
-  id: string;
-  name: string;
+export interface DirectoryResponse {
+  paging: {
+    count: number;
+    offset: number;
+  };
+  individuals: [DirectoryUser];
 }
 
-export interface AcmeGroup {
+export interface DirectoryUser {
   id: string;
-  name: string;
-  users?: Pick<AcmeUser, 'id'>[];
+  first_name: string;
+  last_name: string;
+  middle_name: string | null;
+  department: {
+    name: string;
+  };
+  manager: { id: string } | null;
+  is_active: boolean;
 }
 
-// Those can be useful to a degree, but often they're just full of optional
-// values. Understanding the response data may be more reliably accomplished by
-// reviewing the API response recordings produced by testing the wrapper client
-// (./client.ts). However, when there are no types provided, it is necessary to define
-// opaque types for each resource, to communicate the records that are expected
-// to come from an endpoint and are provided to iterating functions.
+export interface User {
+  id: string;
+  first_name: string;
+  last_name: string;
+  middle_name: string | null;
+  emails:
+    | [
+        {
+          type: string;
+          data: string;
+        },
+      ]
+    | null;
+  phone_numbers:
+    | [
+        {
+          type: string;
+          data: string;
+        },
+      ]
+    | null;
+  department: {
+    name: string;
+  };
+  dob: string;
+}
 
-/*
-import { Opaque } from 'type-fest';
-export type AcmeUser = Opaque<any, 'AcmeUser'>;
-export type AcmeGroup = Opaque<any, 'AcmeGroup'>;
-*/
+export interface Account {
+  id: string;
+  legal_name: string;
+}
